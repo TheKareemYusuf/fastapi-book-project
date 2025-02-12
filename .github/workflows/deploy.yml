@@ -44,12 +44,24 @@ jobs:
           push: true
           tags: ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/fastapi-book-project/fastapi-app:latest
 
+      # Debug SSH key
+      - name: Debug SSH key
+        run: |
+          echo "Setting up SSH key..."
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -l -f ~/.ssh/deploy_key || echo "Invalid key format"
+
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.VM_IP }}
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
+          port: 22
+          script_stop: true
+          debug: true
           script: |
             # Pull the latest image
             docker pull ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/fastapi-book-project/fastapi-app:latest
