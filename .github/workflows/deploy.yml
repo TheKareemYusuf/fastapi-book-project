@@ -7,22 +7,26 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     steps:
       - uses: actions/checkout@v4
 
-      # Setup gcloud CLI
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
+      - name: Google Auth
+        id: auth
         uses: 'google-github-actions/auth@v1'
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          token_format: 'access_token'
 
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v1'
-
-      - name: 'Configure Docker'
-        run: |
-          gcloud auth configure-docker gcr.io --quiet
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.GAR_LOCATION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -32,7 +36,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/fastapi-app:latest
+          tags: ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
 
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v0.1.8
@@ -41,7 +45,8 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            docker pull gcr.io/${{ secrets.GCP_PROJECT_ID }}/fastapi-app:latest
+            gcloud auth configure-docker ${{ secrets.GAR_LOCATION }}-docker.pkg.dev --quiet
+            docker pull ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
             docker stop fastapi-app || true
             docker rm fastapi-app || true
-            docker run -d -p 8000:8000 --name fastapi-app gcr.io/${{ secrets.GCP_PROJECT_ID }}/fastapi-app:latest
+            docker run -d -p 8000:8000 --name fastapi-app ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
