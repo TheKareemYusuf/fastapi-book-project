@@ -1,4 +1,4 @@
-name: Deploy
+name: CD
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
+          tags: ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/fastapi-book-project/fastapi-app:latest
 
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v0.1.8
@@ -36,7 +36,39 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            docker pull ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
+            # Pull the latest image
+            docker pull ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/fastapi-book-project/fastapi-app:latest
+            
+            # Stop and remove existing containers
             docker stop fastapi-app || true
             docker rm fastapi-app || true
-            docker run -d -p 8000:8000 --name fastapi-app ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/fastapi-app:latest
+            
+            # Create network if it doesn't exist
+            docker network create fastapi-network || true
+            
+            # Run the FastAPI container
+            docker run -d \
+              --name fastapi-app \
+              --network fastapi-network \
+              --restart unless-stopped \
+              ${{ secrets.GAR_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/fastapi-book-project/fastapi-app:latest
+            
+            # Setup Nginx configuration
+            sudo tee /etc/nginx/sites-available/fastapi << EOF
+            server {
+                listen 80;
+                server_name _;
+            
+                location / {
+                    proxy_pass http://fastapi-app:8000;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                }
+            }
+            EOF
+            
+            # Enable the site and restart Nginx
+            sudo ln -sf /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl restart nginx
