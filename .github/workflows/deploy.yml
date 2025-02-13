@@ -112,19 +112,8 @@ jobs:
               sudo apt-get install -y nginx
             fi
             
-            # Create Nginx configuration
-            echo 'server {
-                listen 80;
-                server_name _;
-
-                location / {
-                    proxy_pass http://localhost:8000;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-            }' | sudo tee /etc/nginx/sites-available/fastapi
+            # Write Nginx configuration directly
+            sudo sh -c "echo 'server { listen 80; server_name _; location / { proxy_pass http://localhost:8000; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto \$scheme; } }' > /etc/nginx/sites-available/fastapi"
             
             # Enable the site and restart Nginx
             sudo rm -f /etc/nginx/sites-enabled/default
