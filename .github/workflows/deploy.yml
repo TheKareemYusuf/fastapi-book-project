@@ -49,9 +49,25 @@ jobs:
         run: |
           echo "Setting up SSH key..."
           mkdir -p ~/.ssh
-          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          # Save key with explicit newlines
+          echo "${{ secrets.VM_SSH_KEY }}" | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -l -f ~/.ssh/deploy_key || echo "Invalid key formatting"
+          echo "Checking key format..."
+          if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/deploy_key; then
+            echo "Error: Key does not contain the expected header"
+            echo "Please make sure the key starts with '-----BEGIN OPENSSH PRIVATE KEY-----'"
+            exit 1
+          fi
+          if ! grep -q "END OPENSSH PRIVATE KEY" ~/.ssh/deploy_key; then
+            echo "Error: Key does not contain the expected footer"
+            echo "Please make sure the key ends with '-----END OPENSSH PRIVATE KEY-----'"
+            exit 1
+          fi
+          ssh-keygen -l -f ~/.ssh/deploy_key || {
+            echo "Error: Invalid key format"
+            echo "Please make sure you've copied the entire key including headers and footers"
+            exit 1
+          }
 
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v0.1.8
