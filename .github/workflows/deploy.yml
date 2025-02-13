@@ -51,7 +51,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -l -f ~/.ssh/deploy_key || echo "Invalid key format"
+          ssh-keygen -l -f ~/.ssh/deploy_key || echo "Invalid key formatting"
 
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v0.1.8
